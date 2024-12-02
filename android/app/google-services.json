@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "259421280188",
+    "project_id": "papertrailpit-76d98",
+    "storage_bucket": "papertrailpit-76d98.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:259421280188:android:b94b543c036b1a01f0fdb9",
+        "android_client_info": {
+          "package_name": "com.example.elective"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCXt2T6tEqokoiuadRGyopzJTRY7WItCdo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
