@@ -1,200 +1,376 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
+import 'dart:convert';
+import 'package:image_picker/image_picker.dart';
 
 class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({Key? key}) : super(key: key);
+  const ProfileScreen({super.key});
 
-  Future<void> _showLogoutDialog(BuildContext context) async {
-    return showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          title: const Text('Logout Confirmation'),
-          content: const Text('Are you sure you want to logout?'),
+  Future<void> _updateProfilePicture(BuildContext context, String userId) async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      
+      // Show permission dialog
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Photo Permission'),
+          content: const Text('We need access to your photos to set a profile picture. Would you like to allow access?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: const Text('Not Now'),
             ),
             TextButton(
               onPressed: () async {
-                await FirebaseAuth.instance.signOut();
                 Navigator.pop(context);
+                final XFile? image = await picker.pickImage(
+                  source: ImageSource.gallery,
+                  maxWidth: 512,
+                  maxHeight: 512,
+                );
+                
+                if (image != null) {
+                  final bytes = await image.readAsBytes();
+                  final base64Image = base64Encode(bytes);
+                  
+                  await FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(userId)
+                      .update({'profilePicture': base64Image});
+                }
               },
-              child: const Text('Logout', style: TextStyle(color: Colors.red)),
+              child: const Text('Continue'),
             ),
           ],
-        );
-      },
-    );
+        ),
+      );
+    } catch (e) {
+      // Show error dialog if something goes wrong
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Error'),
+          content: const Text('Unable to access photos. Please check your permissions in settings.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    final userId = FirebaseAuth.instance.currentUser?.uid;
 
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.red),
-            onPressed: () => _showLogoutDialog(context),
-          ),
-        ],
-      ),
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(user?.uid)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final userData = snapshot.data!.data() as Map<String, dynamic>;
-          final username = userData['username'] ?? 'User';
-          final email = userData['email'] ?? '';
-
-          return Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
+      appBar: AppBar(),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const SizedBox(height: 40),
+                // Profile section
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(
+                      color: Colors.lightBlue,
+                      width: 1,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
                     children: [
-                      const SizedBox(height: 40),
-                      const CircleAvatar(
-                        radius: 50,
-                        backgroundColor: Color.fromARGB(255, 255, 255, 255),
-                        child: Icon(Icons.person, size: 50, color: Colors.white),
+                      StreamBuilder<DocumentSnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(userId)
+                            .snapshots(),
+                        builder: (context, snapshot) {
+                          String? profileImage;
+                          if (snapshot.hasData && snapshot.data!.exists) {
+                            try {
+                              profileImage = snapshot.data?.get('profilePicture') as String?;
+                            } catch (e) {
+                              // Field doesn't exist or is null
+                              profileImage = null;
+                            }
+                          }
+                          
+                          return GestureDetector(
+                            onTap: () => _updateProfilePicture(context, userId!),
+                            child: Stack(
+                              children: [
+                                CircleAvatar(
+                                  radius: 40,
+                                  backgroundImage: profileImage != null
+                                      ? MemoryImage(base64Decode(profileImage))
+                                      : const AssetImage('lib/assets/profile1.png') as ImageProvider,
+                                ),
+                                Positioned(
+                                  bottom: 0,
+                                  right: 0,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: const Icon(
+                                      Icons.edit,
+                                      color: Colors.white,
+                                      size: 16,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
-                      const SizedBox(height: 16),
-                      Text(
-                        username,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      const SizedBox(width: 16),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          StreamBuilder<DocumentSnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(userId)
+                                .snapshots(),
+                            builder: (context, snapshot) {
+                              if (snapshot.hasError) {
+                                return const Text('Error loading username');
+                              }
+
+                              if (snapshot.connectionState == ConnectionState.waiting) {
+                                return const CircularProgressIndicator();
+                              }
+
+                              final username = snapshot.data?.get('username') ?? 'username';
+                              return Row(
+                                mainAxisAlignment: MainAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    username,
+                                    style: const TextStyle(
+                                        fontSize: 16, fontWeight: FontWeight.bold),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.edit, size: 20),
+                                    onPressed: () {
+                                      final TextEditingController controller = TextEditingController(text: username);
+                                      showDialog(
+                                        context: context,
+                                        builder: (context) => AlertDialog(
+                                          title: const Text('Edit Username'),
+                                          content: TextField(
+                                            controller: controller,
+                                            decoration: const InputDecoration(
+                                              labelText: 'Username',
+                                            ),
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(context),
+                                              child: const Text('Cancel'),
+                                            ),
+                                            TextButton(
+                                              onPressed: () async {
+                                                if (controller.text.trim().isNotEmpty) {
+                                                  await FirebaseFirestore.instance
+                                                      .collection('users')
+                                                      .doc(userId)
+                                                      .update({'username': controller.text.trim()});
+                                                  Navigator.pop(context);
+                                                }
+                                              },
+                                              child: const Text('Save'),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            FirebaseAuth.instance.currentUser?.email ?? 'No email',
+                            style: const TextStyle(color: Colors.grey),
+                          ),
+                        ],
                       ),
-                      Text(
-                        email,
-                        style: const TextStyle(
-                          color: Colors.grey,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      _buildSection('File Uploaded', Colors.blue),
-                      _buildFileList(true),
-                      const SizedBox(height: 20),
-                      _buildSection('File Downloaded', Colors.blue),
-                      _buildFileList(false),
                     ],
                   ),
                 ),
-              ),
-              // Bottom Navigation Bar
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  border: Border(top: BorderSide(color: Colors.grey[300]!)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.of(context).pushReplacementNamed('/dashboard');
-                      },
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.home, color: Colors.grey),
-                          Text('Home', style: TextStyle(color: Colors.grey)),
-                        ],
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.of(context).pushReplacementNamed('/downloads');
-                      },
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.download, color: Colors.grey),
-                          Text('Download', style: TextStyle(color: Colors.grey)),
-                        ],
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.of(context).pushReplacementNamed('/profile');
-                      },
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.person, color: Colors.blue),
-                          Text('Profile', style: TextStyle(color: Colors.blue)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
 
-  Widget _buildSection(String title, Color color) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      color: color,
-      child: Text(
-        title,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
+                const SizedBox(height: 24),
+
+                // Files Uploaded Container
+                Container(
+                  width: double.infinity,
+                  height: 350,
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(
+                      color: Colors.lightBlue,
+                      width: 1,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const Text(
+                          'Files Uploaded',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Expanded(
+                          child: StreamBuilder<QuerySnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('uploads')
+                                .where('userId', isEqualTo: userId)
+                                .orderBy('uploadDate', descending: true)
+                                .snapshots(),
+                            builder: (context, snapshot) {
+                              if (snapshot.hasError) {
+                                print(snapshot.error);
+                                return const Center(
+                                  child: Text('Error loading documents'),
+                                );
+                              }
+
+                              if (snapshot.connectionState ==
+                                  ConnectionState.waiting) {
+                                return const Center(
+                                  child: CircularProgressIndicator(),
+                                );
+                              }
+
+                              if (snapshot.data?.docs.isEmpty ?? true) {
+                                return Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: const [
+                                    Icon(
+                                      Icons.folder_open,
+                                      size: 64,
+                                      color: Colors.grey,
+                                    ),
+                                    SizedBox(height: 16),
+                                    Text(
+                                      'No Documents uploaded',
+                                      style: TextStyle(
+                                        color: Colors.grey,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }
+
+                              return ListView.builder(
+                                shrinkWrap: true,
+                                itemCount: snapshot.data!.docs.length,
+                                itemBuilder: (context, index) {
+                                  final doc = snapshot.data!.docs[index];
+
+                                  return ListTile(
+                                    leading: const Icon(Icons.file_present),
+                                    title: Text(doc['fileName']),
+                                    subtitle: Text(
+                                      doc['uploadDate'] != null
+                                          ? DateFormat('MMM d, yyyy').format(
+                                              doc['uploadDate'].toDate())
+                                          : 'Date unknown',
+                                    ),
+                                    trailing: IconButton(
+                                      icon: const Icon(Icons.download),
+                                      onPressed: () {
+                                        // TODO: Implement download functionality
+                                      },
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Added spacing between container and logout button
+                const SizedBox(height: 24),
+
+                // Moved logout button here
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () async {
+                        showDialog(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Logout'),
+                            content: const Text(
+                                'Are you sure you want to logout?'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () async {
+                                  await FirebaseAuth.instance.signOut();
+                                  Navigator.pop(context);
+                                },
+                                child: const Text('Logout'),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.logout, color: Colors.red),
+                      label: const Text(
+                        'Logout',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Add some bottom padding
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
         ),
       ),
-    );
-  }
-
-  Widget _buildFileList(bool isUploaded) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('files')
-          .where('userId', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
-          .where('isUploaded', isEqualTo: isUploaded)
-          .orderBy('timestamp', descending: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        return Column(
-          children: snapshot.data!.docs.map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            return ListTile(
-              leading: const Icon(Icons.insert_drive_file),
-              title: Text(data['fileName'] ?? 'Unnamed File'),
-              subtitle: Text(data['timestamp']?.toDate()?.toString() ?? ''),
-              trailing: isUploaded
-                  ? Text('Uploaded by ${data['uploadedBy'] ?? 'Unknown'}')
-                  : null,
-            );
-          }).toList(),
-        );
-      },
     );
   }
 }

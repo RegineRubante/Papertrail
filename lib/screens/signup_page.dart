@@ -2,6 +2,7 @@ import 'package:elective/reusable/reuseable.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -13,12 +14,12 @@ class SignupPage extends StatefulWidget {
 class _SignupPageState extends State<SignupPage> {
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
+  bool _isTermsAccepted = false;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _familyNameController = TextEditingController();
-  final _firstNameController = TextEditingController();
   final _usernameController = TextEditingController();
+  String? _selectedRole;
 
   @override
   Widget build(BuildContext context) {
@@ -29,6 +30,7 @@ class _SignupPageState extends State<SignupPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              SizedBox(height: 20,),
               const Text(
                 'Create a New Account',
                 style: TextStyle(
@@ -37,42 +39,6 @@ class _SignupPageState extends State<SignupPage> {
                 ),
               ),
               const SizedBox(height: 24),
-              
-              // Name fields
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _familyNameController,
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.blue[50],
-                        hintText: 'Family name',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: _firstNameController,
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.blue[50],
-                        hintText: 'First name',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
               
               // Email, username and password fields
               TextField(
@@ -103,6 +69,32 @@ class _SignupPageState extends State<SignupPage> {
                 ),
               ),
               const SizedBox(height: 16),
+
+              // Dropdown for selecting user role
+              DropdownButtonFormField<String>(
+                value: _selectedRole,
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: Colors.blue[50],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'Admin & Finance', child: Text('Admin & Finance')),
+                  DropdownMenuItem(value: 'Operational', child: Text('Operational')),
+                  DropdownMenuItem(value: 'Engineering', child: Text('Engineering')),
+                  DropdownMenuItem(value: 'Institutional', child: Text('Institutional')),
+                ],
+                onChanged: (String? newValue) {
+                  setState(() {
+                    _selectedRole = newValue!;
+                  });
+                },
+              ),
+              const SizedBox(height: 24),
+
               TextField(
                 obscureText: !_isPasswordVisible,
                 controller: _passwordController,
@@ -151,6 +143,76 @@ class _SignupPageState extends State<SignupPage> {
                 ),
               ),
               const SizedBox(height: 24),
+
+              // Terms and Conditions Checkbox
+              Row(
+                children: [
+                  Checkbox(
+                    value: _isTermsAccepted,
+                    onChanged: (bool? value) {
+                      setState(() {
+                        _isTermsAccepted = value ?? false;
+                      });
+                    },
+                  ),
+                  const Text('I agree to the '),
+                  GestureDetector(
+                    onTap: () {
+                      showDialog(
+                        context: context,
+                        builder: (BuildContext context) {
+                          return AlertDialog(
+                            title: const Text('Terms and Conditions'),
+                            content: const SingleChildScrollView(
+                              child: Text(
+                                'By using the services provided by the PaperTrail, you agree to comply with and be bound by the following Terms and Conditions. These Terms govern your use of the System, which is designed to organize files, scan images, and convert them into PDF format.\n\n'
+                                'Please read these Terms carefully. If you do not agree to these Terms, do not use the Service.\n\n'
+                                '1. Acceptance of Terms\n'
+                                'By accessing or using the Service, you confirm that you have read, understood, and agree to be bound by these Terms and Conditions. If you do not agree, you must not use the Service.\n\n'
+                                '2. User Responsibilities\n'
+                                'You agree to:\n'
+                                '- Use the Service only for lawful purposes and in accordance with these Terms.\n'
+                                '- Ensure that the files, images, and documents you upload to the System do not infringe on any third-party intellectual property rights.\n'
+                                '- Not use the Service to upload, scan, or distribute any content that is illegal, harmful, or otherwise prohibited by applicable laws or regulations.\n\n'
+                                '3. Account Registration and Security\n'
+                                'If you register for an account to use the Service:\n'
+                                'You agree to provide accurate and complete information during the registration process.\n'
+                                '-You are responsible for maintaining the confidentiality of your account information, including your password.\n'
+                                'You agree to notify us immediately of any unauthorized use of your account.\n\n'
+                                '4. Intellectual Property Rights\n'
+                                'The System and all related content, including text, graphics, images, and software, are owned by or licensed to the System owner and are protected by copyright, trademark, and other intellectual property laws.\n'
+                                'You are granted a non-exclusive, non-transferable license to use the Service solely for personal or business purposes, in accordance with these Terms.\n\n'
+                                '5. Privacy and Data Collection\n'
+                                'The use of the Service may involve the collection of personal data, such as your contact information, files, and scanning data.\n'
+                                'By using the Service, you consent to our collection, use, and processing of your data as described in our Privacy Policy.\n\n'
+                                '6. Termination\n'
+                                'We may suspend or terminate your access to the Service, with or without cause, and with or without notice, if we believe that you have violated these Terms or for any other reason at our discretion.\n\n'
+                                'By using the System, you acknowledge that you have read, understood, and agree to these Terms and Conditions.',
+                              ),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.of(context).pop();
+                                },
+                                child: const Text('Close'),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                    child: const Text(
+                      'Terms and Conditions',
+                      style: TextStyle(
+                        color: Colors.blue,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
               
               // Sign up button
               Center(
@@ -158,6 +220,13 @@ class _SignupPageState extends State<SignupPage> {
                   context,
                   'Sign Up',
                   () async {
+                    if (!_isTermsAccepted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('You must agree to the terms and conditions to sign up.')),
+                      );
+                      return;
+                    }
+
                     if (_passwordController.text != _confirmPasswordController.text) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Passwords do not match!')),
@@ -166,44 +235,93 @@ class _SignupPageState extends State<SignupPage> {
                     }
 
                     try {
+                      // Create user account
                       final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
                         email: _emailController.text.trim(),
                         password: _passwordController.text.trim(),
                       );
 
-                      // Add user details to Firestore
+                      // Store user details in Firestore
                       await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
-                        'familyName': _familyNameController.text.trim(),
-                        'firstName': _firstNameController.text.trim(),
                         'username': _usernameController.text.trim(),
                         'email': _emailController.text.trim(),
+                        'role': _selectedRole,
+                        'emailVerified': false,
                       });
 
-                      // Show success dialog
+                      // Send verification email
+                      await userCredential.user!.sendEmailVerification();
+
+                      // Store credentials for verification check
+                      final String email = _emailController.text.trim();
+                      final String password = _passwordController.text.trim();
+
                       if (mounted) {
-                        await showDialog(
+                        // Show verification dialog
+                        showDialog(
                           context: context,
                           barrierDismissible: false,
                           builder: (BuildContext context) {
-                            return AlertDialog(
-                              title: const Text('Success'),
-                              content: const Text('Account created successfully!'),
-                              actions: [
-                                TextButton(
-                                  onPressed: () {
-                                    Navigator.of(context).pop(); // Close dialog
-                                    // Show success SnackBar
+                            // Start verification check timer
+                            Timer.periodic(const Duration(seconds: 3), (timer) async {
+                              try {
+                                // Sign in and check verification status
+                                await FirebaseAuth.instance.signInWithEmailAndPassword(
+                                  email: email,
+                                  password: password,
+                                );
+                                
+                                await FirebaseAuth.instance.currentUser?.reload();
+                                final user = FirebaseAuth.instance.currentUser;
+
+                                if (user?.emailVerified ?? false) {
+                                  timer.cancel();
+                                  
+                                  // Update Firestore verification status
+                                  await FirebaseFirestore.instance
+                                      .collection('users')
+                                      .doc(user!.uid)
+                                      .update({'emailVerified': true});
+
+                                  if (context.mounted) {
+                                    Navigator.pop(context);
+                                    Navigator.pop(context);
+                                    Navigator.pushReplacementNamed(context, '/home');
+                                    
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
-                                        content: Text('Welcome! You can now log in with your credentials.'),
+                                        content: Text('Email verified successfully! Welcome!'),
                                         backgroundColor: Colors.green,
                                       ),
                                     );
-                                    Navigator.pushReplacementNamed(context, '/login'); // Navigate to login
-                                  },
-                                  child: const Text('OK'),
-                                ),
-                              ],
+                                  }
+                                }
+                              } catch (e) {
+                                print('Verification check error: $e');
+                              }
+                            });
+
+                            return AlertDialog(
+                              title: const Text('Verify Your Email'),
+                              content: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text(
+                                    'Please check your email and click the verification link to continue.',
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 20),
+                                  const CircularProgressIndicator(),
+                                  const SizedBox(height: 20),
+                                  TextButton(
+                                    onPressed: () {
+                                      Navigator.of(context).pop();
+                                      Navigator.pushReplacementNamed(context, '/login');
+                                    },
+                                    child: const Text('Verify Later'),
+                                  ),
+                                ],
+                              ),
                             );
                           },
                         );
@@ -249,8 +367,6 @@ class _SignupPageState extends State<SignupPage> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
-    _familyNameController.dispose();
-    _firstNameController.dispose();
     _usernameController.dispose();
     super.dispose();
   }
