@@ -1,5 +1,4 @@
 import 'package:elective/screens/auth.dart';
-import 'package:elective/screens/dashboard.dart';
 import 'package:elective/screens/get_started.dart';
 import 'package:elective/screens/login_page.dart';
 import 'package:elective/screens/profile.dart';
@@ -8,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:get/get.dart';
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
@@ -31,7 +29,6 @@ class MyApp extends StatelessWidget {
         '/start': (context) => const GetStarted(),
         '/login': (context) => const LoginPage(),
         '/signup': (context) => const SignupPage(),
-        '/dashboard': (context) => const DashboardScreen(),
         '/profile': (context) => ProfileScreen(),
       },
     );

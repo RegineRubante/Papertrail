@@ -4,20 +4,23 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
+import 'package:base_codecs/base_codecs.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
-  Future<void> _updateProfilePicture(BuildContext context, String userId) async {
+  Future<void> _updateProfilePicture(
+      BuildContext context, String userId) async {
     try {
       final ImagePicker picker = ImagePicker();
-      
+
       // Show permission dialog
       await showDialog(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Photo Permission'),
-          content: const Text('We need access to your photos to set a profile picture. Would you like to allow access?'),
+          content: const Text(
+              'We need access to your photos to set a profile picture. Would you like to allow access?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -31,15 +34,15 @@ class ProfileScreen extends StatelessWidget {
                   maxWidth: 512,
                   maxHeight: 512,
                 );
-                
+
                 if (image != null) {
                   final bytes = await image.readAsBytes();
-                  final base64Image = base64Encode(bytes);
-                  
+                  final base85Image = base85AsciiEncode(bytes);
+
                   await FirebaseFirestore.instance
                       .collection('users')
                       .doc(userId)
-                      .update({'profilePicture': base64Image});
+                      .update({'profilePicture': base85Image});
                 }
               },
               child: const Text('Continue'),
@@ -53,7 +56,8 @@ class ProfileScreen extends StatelessWidget {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Error'),
-          content: const Text('Unable to access photos. Please check your permissions in settings.'),
+          content: const Text(
+              'Unable to access photos. Please check your permissions in settings.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -101,22 +105,27 @@ class ProfileScreen extends StatelessWidget {
                           String? profileImage;
                           if (snapshot.hasData && snapshot.data!.exists) {
                             try {
-                              profileImage = snapshot.data?.get('profilePicture') as String?;
+                              profileImage = snapshot.data
+                                  ?.get('profilePicture') as String?;
                             } catch (e) {
                               // Field doesn't exist or is null
                               profileImage = null;
                             }
                           }
-                          
+
                           return GestureDetector(
-                            onTap: () => _updateProfilePicture(context, userId!),
+                            onTap: () =>
+                                _updateProfilePicture(context, userId!),
                             child: Stack(
                               children: [
                                 CircleAvatar(
                                   radius: 40,
                                   backgroundImage: profileImage != null
-                                      ? MemoryImage(base64Decode(profileImage))
-                                      : const AssetImage('lib/assets/profile1.png') as ImageProvider,
+                                      ? MemoryImage(
+                                          base85AsciiDecode(profileImage))
+                                      : const AssetImage(
+                                              'lib/assets/profile1.png')
+                                          as ImageProvider,
                                 ),
                                 Positioned(
                                   bottom: 0,
@@ -153,23 +162,27 @@ class ProfileScreen extends StatelessWidget {
                                 return const Text('Error loading username');
                               }
 
-                              if (snapshot.connectionState == ConnectionState.waiting) {
+                              if (snapshot.connectionState ==
+                                  ConnectionState.waiting) {
                                 return const CircularProgressIndicator();
                               }
 
-                              final username = snapshot.data?.get('username') ?? 'username';
+                              final username =
+                                  snapshot.data?.get('username') ?? 'username';
                               return Row(
                                 mainAxisAlignment: MainAxisAlignment.start,
                                 children: [
                                   Text(
                                     username,
                                     style: const TextStyle(
-                                        fontSize: 16, fontWeight: FontWeight.bold),
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold),
                                   ),
                                   IconButton(
                                     icon: const Icon(Icons.edit, size: 20),
                                     onPressed: () {
-                                      final TextEditingController controller = TextEditingController(text: username);
+                                      final TextEditingController controller =
+                                          TextEditingController(text: username);
                                       showDialog(
                                         context: context,
                                         builder: (context) => AlertDialog(
@@ -182,16 +195,23 @@ class ProfileScreen extends StatelessWidget {
                                           ),
                                           actions: [
                                             TextButton(
-                                              onPressed: () => Navigator.pop(context),
+                                              onPressed: () =>
+                                                  Navigator.pop(context),
                                               child: const Text('Cancel'),
                                             ),
                                             TextButton(
                                               onPressed: () async {
-                                                if (controller.text.trim().isNotEmpty) {
-                                                  await FirebaseFirestore.instance
+                                                if (controller.text
+                                                    .trim()
+                                                    .isNotEmpty) {
+                                                  await FirebaseFirestore
+                                                      .instance
                                                       .collection('users')
                                                       .doc(userId)
-                                                      .update({'username': controller.text.trim()});
+                                                      .update({
+                                                    'username':
+                                                        controller.text.trim()
+                                                  });
                                                   Navigator.pop(context);
                                                 }
                                               },
@@ -208,7 +228,8 @@ class ProfileScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            FirebaseAuth.instance.currentUser?.email ?? 'No email',
+                            FirebaseAuth.instance.currentUser?.email ??
+                                'No email',
                             style: const TextStyle(color: Colors.grey),
                           ),
                         ],
@@ -323,7 +344,101 @@ class ProfileScreen extends StatelessWidget {
                 // Added spacing between container and logout button
                 const SizedBox(height: 24),
 
-                // Moved logout button here
+                // Added Change Password button
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () {
+                        final currentPasswordController =
+                            TextEditingController();
+                        final newPasswordController = TextEditingController();
+
+                        showDialog(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Change Password'),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                TextField(
+                                  controller: currentPasswordController,
+                                  obscureText: true,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Current Password',
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                TextField(
+                                  controller: newPasswordController,
+                                  obscureText: true,
+                                  decoration: const InputDecoration(
+                                    labelText: 'New Password',
+                                  ),
+                                ),
+                              ],
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () async {
+                                  try {
+                                    final user =
+                                        FirebaseAuth.instance.currentUser;
+                                    final credential =
+                                        EmailAuthProvider.credential(
+                                      email: user?.email ?? '',
+                                      password: currentPasswordController.text,
+                                    );
+
+                                    // Reauthenticate user
+                                    await user?.reauthenticateWithCredential(
+                                        credential);
+                                    // Change password
+                                    await user?.updatePassword(
+                                        newPasswordController.text);
+
+                                    Navigator.pop(context);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                            'Password updated successfully'),
+                                      ),
+                                    );
+                                  } catch (e) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                            'Failed to change password. Please check your current password.'),
+                                      ),
+                                    );
+                                  }
+                                },
+                                child: const Text('Change'),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.lock_outline, color: Colors.blue),
+                      label: const Text(
+                        'Change Password',
+                        style: TextStyle(
+                          color: Colors.blue,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Existing logout button
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32),
                   child: Align(
@@ -334,8 +449,8 @@ class ProfileScreen extends StatelessWidget {
                           context: context,
                           builder: (context) => AlertDialog(
                             title: const Text('Logout'),
-                            content: const Text(
-                                'Are you sure you want to logout?'),
+                            content:
+                                const Text('Are you sure you want to logout?'),
                             actions: [
                               TextButton(
                                 onPressed: () => Navigator.pop(context),

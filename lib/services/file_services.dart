@@ -4,12 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:open_file/open_file.dart';
+import 'package:base_codecs/base_codecs.dart';
 
 class FileService {
   static Future<void> downloadAndOpenFile(
     BuildContext context,
     String fileName,
-    String base64Data,
+    String base85Data,
   ) async {
     try {
       debugPrint('Starting download process...');
@@ -31,8 +32,8 @@ class FileService {
       final filePath = '${directory.path}/$fileName.pdf';
       debugPrint('File path: ${directory.path}/$fileName.pdf');
 
-      debugPrint('Decoding base64 data...');
-      final bytes = base64Decode(base64Data);
+      debugPrint('Decoding base85 data...');
+      final bytes = base85AsciiDecode(base85Data);
       final file = File(filePath);
       debugPrint('Writing bytes to file...');
       await file.writeAsBytes(bytes);

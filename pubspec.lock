@@ -33,6 +33,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.8"
+  base_codecs:
+    dependency: "direct main"
+    description:
+      name: base_codecs
+      sha256: "41701a12ede9912663decd708279924ece5018566daa7d1f484d5f4f10894f91"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.1"
   bidi:
     dependency: transitive
     description:

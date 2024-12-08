@@ -1,3 +1,4 @@
+import 'package:base_codecs/base_codecs.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -13,7 +14,12 @@ import '../services/file_services.dart';
 import 'package:file_picker/file_picker.dart';
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  final List<Widget> roleSpecificFeatures;
+
+  const DashboardScreen({
+    super.key,
+    this.roleSpecificFeatures = const [],
+  });
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -86,17 +92,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         String? profileImage;
                         if (snapshot.hasData && snapshot.data!.exists) {
                           try {
-                            profileImage = snapshot.data?.get('profilePicture') as String?;
+                            profileImage =
+                                snapshot.data?.get('profilePicture') as String?;
                           } catch (e) {
                             profileImage = null;
                           }
                         }
-                        
+
                         return CircleAvatar(
                           radius: 40,
                           backgroundImage: profileImage != null
-                              ? MemoryImage(base64Decode(profileImage))
-                              : const AssetImage('lib/assets/profile1.png') as ImageProvider,
+                              ? MemoryImage(base85AsciiDecode(profileImage))
+                              : const AssetImage('lib/assets/profile1.png')
+                                  as ImageProvider,
                         );
                       },
                     ),
@@ -201,9 +209,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           final Uint8List pdfBytes = await pdf.save();
                           print('PDF size: ${pdfBytes.length} bytes');
 
-                          // Convert to base64
-                          final String base64PDF = base64Encode(pdfBytes);
-                          print('Base64 conversion complete');
+                          // Convert to base85 ASCII
+                          final String base85PDF = base85AsciiEncode(pdfBytes);
+                          print('Base85 ASCII conversion complete');
 
                           // Upload to Firestore
                           final userId = FirebaseAuth.instance.currentUser?.uid;
@@ -227,7 +235,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 TextButton(
                                   onPressed: () async {
                                     await uploadFile(context, userId,
-                                        fileNameController.text, base64PDF);
+                                        fileNameController.text, base85PDF);
                                   },
                                   child: const Text('Save'),
                                 ),
@@ -261,7 +269,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       onPressed: () async {
                         try {
                           // Pick a PDF file
-                          FilePickerResult? result = await FilePicker.platform.pickFiles(
+                          FilePickerResult? result =
+                              await FilePicker.platform.pickFiles(
                             type: FileType.custom,
                             allowedExtensions: ['pdf'],
                           );
@@ -275,15 +284,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                             // Read file bytes using dart:io
                             File pickedFile = File(file.path!);
-                            Uint8List fileBytes = await pickedFile.readAsBytes();
-                            debugPrint('File bytes read successfully: ${fileBytes.length} bytes');
+                            Uint8List fileBytes =
+                                await pickedFile.readAsBytes();
+                            debugPrint(
+                                'File bytes read successfully: ${fileBytes.length} bytes');
 
-                            // Convert to base64
-                            String base64PDF = base64Encode(fileBytes);
-                            debugPrint('Base64 conversion complete');
+                            // Convert to base85 ASCII
+                            String base85PDF = base85AsciiEncode(fileBytes);
+                            debugPrint('Base85 ASCII conversion complete');
 
                             // Get the user ID
-                            final userId = FirebaseAuth.instance.currentUser?.uid;
+                            final userId =
+                                FirebaseAuth.instance.currentUser?.uid;
                             if (userId == null) {
                               Get.snackbar(
                                 'Error',
@@ -295,7 +307,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                             if (context.mounted) {
                               // Show dialog to enter file name
-                              final fileNameController = TextEditingController(text: file.name);
+                              final fileNameController =
+                                  TextEditingController(text: file.name);
                               showDialog<void>(
                                 context: context,
                                 builder: (BuildContext context) => AlertDialog(
@@ -317,7 +330,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                           context,
                                           userId,
                                           fileNameController.text,
-                                          base64PDF,
+                                          base85PDF,
                                         );
                                       },
                                       child: const Text('Save'),
@@ -360,6 +373,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
               const SizedBox(height: 24),
 
+              // Role-specific features
+              if (widget.roleSpecificFeatures.isNotEmpty) ...[
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(
+                      color: Colors.lightBlue,
+                      width: 1,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    children: widget.roleSpecificFeatures,
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
+
               // Files Uploaded Container
               Container(
                 width: double.infinity,
@@ -387,116 +421,133 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       const SizedBox(height: 16),
                       Expanded(
-                        child: StreamBuilder<QuerySnapshot>(
+                        child: StreamBuilder<DocumentSnapshot>(
                           stream: FirebaseFirestore.instance
-                              .collection('uploads')
-                              .where('userId', isEqualTo: userId)
-                              .orderBy('uploadDate', descending: true)
+                              .collection('users')
+                              .doc(userId)
                               .snapshots(),
-                          builder: (context, snapshot) {
-                            if (snapshot.hasError) {
-                              print(snapshot.error);
-                              return const Center(
-                                child: Text('Error loading documents'),
-                              );
-                            }
+                          builder: (context, userSnapshot) {
+                            if (!userSnapshot.hasData)
+                              return const CircularProgressIndicator();
 
-                            if (snapshot.connectionState ==
-                                ConnectionState.waiting) {
-                              return const Center(
-                                child: CircularProgressIndicator(),
-                              );
-                            }
+                            final currentUserRole =
+                                userSnapshot.data?.get('role') ?? '';
 
-                            if (snapshot.data?.docs.isEmpty ?? true) {
-                              return const Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.folder_open,
-                                    size: 64,
-                                    color: Colors.grey,
-                                  ),
-                                  SizedBox(height: 16),
-                                  Text(
-                                    'No Documents uploaded',
-                                    style: TextStyle(
-                                      color: Colors.grey,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ],
-                              );
-                            }
+                            return StreamBuilder<QuerySnapshot>(
+                              stream: FirebaseFirestore.instance
+                                  .collection('uploads')
+                                  .where('role', isEqualTo: currentUserRole)
+                                  .orderBy('uploadDate', descending: true)
+                                  .snapshots(),
+                              builder: (context, snapshot) {
+                                if (snapshot.hasError) {
+                                  print(snapshot.error);
+                                  return const Center(
+                                    child: Text('Error loading documents'),
+                                  );
+                                }
 
-                            // Filter documents based on search query
-                            final filteredDocs =
-                                snapshot.data!.docs.where((doc) {
-                              final fileName =
-                                  doc['fileName'].toString().toLowerCase();
-                              return fileName.contains(_searchQuery);
-                            }).toList();
+                                if (snapshot.connectionState ==
+                                    ConnectionState.waiting) {
+                                  return const Center(
+                                    child: CircularProgressIndicator(),
+                                  );
+                                }
 
-                            if (filteredDocs.isEmpty) {
-                              return const Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.search_off,
-                                    size: 64,
-                                    color: Colors.grey,
-                                  ),
-                                  SizedBox(height: 16),
-                                  Text(
-                                    'No matching documents found',
-                                    style: TextStyle(
-                                      color: Colors.grey,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ],
-                              );
-                            }
+                                if (snapshot.data?.docs.isEmpty ?? true) {
+                                  return const Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.folder_open,
+                                        size: 64,
+                                        color: Colors.grey,
+                                      ),
+                                      SizedBox(height: 16),
+                                      Text(
+                                        'No Documents uploaded',
+                                        style: TextStyle(
+                                          color: Colors.grey,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }
 
-                            return ListView.builder(
-                              shrinkWrap: true,
-                              itemCount: filteredDocs.length,
-                              itemBuilder: (context, index) {
-                                final doc = filteredDocs[index];
+                                // Filter documents based on search query
+                                final filteredDocs =
+                                    snapshot.data!.docs.where((doc) {
+                                  final fileName =
+                                      doc['fileName'].toString().toLowerCase();
+                                  return fileName.contains(_searchQuery);
+                                }).toList();
 
-                                return ListTile(
-                                  leading: const Icon(Icons.file_present),
-                                  title: Text(doc['fileName']),
-                                  subtitle: Text(
-                                    doc['uploadDate'] != null
-                                        ? DateFormat('MMM d, yyyy')
-                                            .format(doc['uploadDate'].toDate())
-                                        : 'Date unknown',
-                                  ),
-                                  trailing: IconButton(
-                                    icon: const Icon(Icons.download),
-                                    onPressed: () async {
-                                      debugPrint('Downloading file...');
-                                      final fileData =
-                                          await FileService.getFileData(doc.id);
-                                      if (fileData != null && context.mounted) {
-                                        await FileService.downloadAndOpenFile(
-                                          context,
-                                          doc['fileName'],
-                                          fileData,
-                                        );
-                                      } else if (context.mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          const SnackBar(
-                                            content:
-                                                Text('Could not download file'),
-                                            backgroundColor: Colors.red,
-                                          ),
-                                        );
-                                      }
-                                    },
-                                  ),
+                                if (filteredDocs.isEmpty) {
+                                  return const Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.search_off,
+                                        size: 64,
+                                        color: Colors.grey,
+                                      ),
+                                      SizedBox(height: 16),
+                                      Text(
+                                        'No matching documents found',
+                                        style: TextStyle(
+                                          color: Colors.grey,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }
+
+                                return ListView.builder(
+                                  shrinkWrap: true,
+                                  itemCount: filteredDocs.length,
+                                  itemBuilder: (context, index) {
+                                    final doc = filteredDocs[index];
+
+                                    return ListTile(
+                                      leading: const Icon(Icons.file_present),
+                                      title: Text(doc['fileName']),
+                                      subtitle: Text(
+                                        doc['uploadDate'] != null
+                                            ? DateFormat('MMM d, yyyy').format(
+                                                doc['uploadDate'].toDate())
+                                            : 'Date unknown',
+                                      ),
+                                      trailing: IconButton(
+                                        icon: const Icon(Icons.download),
+                                        onPressed: () async {
+                                          debugPrint('Downloading file...');
+                                          final fileData =
+                                              await FileService.getFileData(
+                                                  doc.id);
+                                          if (fileData != null &&
+                                              context.mounted) {
+                                            await FileService
+                                                .downloadAndOpenFile(
+                                              context,
+                                              doc['fileName'],
+                                              fileData,
+                                            );
+                                          } else if (context.mounted) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                    'Could not download file'),
+                                                backgroundColor: Colors.red,
+                                              ),
+                                            );
+                                          }
+                                        },
+                                      ),
+                                    );
+                                  },
                                 );
                               },
                             );
@@ -517,19 +568,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> uploadFile(BuildContext context, String userId, String fileName,
-      String base64PDF) async {
-    print('Uploading to Firestore...');
+      String base85PDF) async {
     showDialog<void>(
       context: context,
       builder: (BuildContext context) => const Center(
         child: CircularProgressIndicator(),
       ),
     );
+
+    // Get user's role from Firestore
+    final userDoc =
+        await FirebaseFirestore.instance.collection('users').doc(userId).get();
+    final userRole = userDoc.get('role') as String;
+
     await FirebaseFirestore.instance.collection('uploads').add({
       'fileName': fileName,
       'uploadDate': FieldValue.serverTimestamp(),
-      'fileData': base64PDF,
+      'fileData': base85PDF,
       'userId': userId,
+      'role': userRole,
     });
 
     print('Upload complete');

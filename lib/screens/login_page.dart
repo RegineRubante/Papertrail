@@ -20,7 +20,6 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    controller.resetPage();
     return Scaffold(
       body: SingleChildScrollView(
         child: Padding(
@@ -146,6 +145,29 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> signIn(BuildContext context) async {
+    // First validate the email format
+    final email = emailController.text.trim();
+    if (!isValidEmail(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid email address'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Validate password is not empty
+    if (passwordController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter your password'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     try {
       showDialog(
         context: context,
@@ -155,10 +177,70 @@ class _LoginPageState extends State<LoginPage> {
         ),
       );
 
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: emailController.text.trim(),
+      // Sign in the user
+      UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
         password: passwordController.text.trim(),
       );
+
+      // Check if email is verified
+      if (!userCredential.user!.emailVerified) {
+        if (context.mounted) {
+          // Remove loading dialog
+          Navigator.of(context).pop();
+          
+          // Show verification needed dialog
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Email Not Verified'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Please verify your email before signing in.\n\n'
+                    'Check your inbox (and spam folder) for the verification email.',
+                  ),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: () async {
+                      try {
+                        await userCredential.user?.sendEmailVerification();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Verification email sent!'),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Failed to send verification email. Please try again later.'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    child: const Text('Resend Verification Email'),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+        // Sign out the user since they're not verified
+        await FirebaseAuth.instance.signOut();
+        return;
+      }
 
       if (context.mounted) {
         // Remove loading dialog
@@ -184,6 +266,12 @@ class _LoginPageState extends State<LoginPage> {
         );
       }
     }
+  }
+
+  bool isValidEmail(String email) {
+    // Regular expression for email validation
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    return emailRegex.hasMatch(email);
   }
 
   @override

@@ -49,6 +49,7 @@ dependencies:
   open_file: ^3.3.2
   permission_handler: ^11.0.1
   file_picker: ^5.0.0
+  base_codecs: ^1.0.1
 
 dev_dependencies:
   flutter_test:

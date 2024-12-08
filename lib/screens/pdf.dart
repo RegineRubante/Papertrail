@@ -6,7 +6,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:convert';
+import 'package:base_codecs/base_codecs.dart';
 
 class PDFScreen extends StatelessWidget {
   const PDFScreen({super.key, required this.scannedImages});
@@ -100,9 +100,9 @@ class PDFScreen extends StatelessWidget {
                 final Uint8List pdfBytes = await pdf.save();
                 print('PDF size: ${pdfBytes.length} bytes');
 
-                // Convert to base64
-                final String base64PDF = base64Encode(pdfBytes);
-                print('Base64 conversion complete');
+                // Convert to base85 ASCII
+                final String base85PDF = base85AsciiEncode(pdfBytes);
+                print('Base85 ASCII conversion complete');
 
                 // Upload to Firestore
                 final userId = FirebaseAuth.instance.currentUser?.uid;
@@ -117,7 +117,7 @@ class PDFScreen extends StatelessWidget {
                     .set({
                   'fileName': fileName,
                   'uploadDate': FieldValue.serverTimestamp(),
-                  'fileData': base64PDF,
+                  'fileData': base85PDF,
                 });
 
                 print('Upload complete');

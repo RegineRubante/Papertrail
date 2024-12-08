@@ -208,7 +208,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Downloaded Files',
+                          'Local Files',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
